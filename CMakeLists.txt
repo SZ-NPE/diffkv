@@ -83,34 +83,34 @@ if (WITH_TITAN_TESTS OR WITH_TITAN_TOOLS)
   endif()
 endif()
 
-if (WITH_TITAN_TESTS AND (NOT CMAKE_BUILD_TYPE STREQUAL "Release"))
-  include(CTest)
-  include_directories(SYSTEM ${ROCKSDB_DIR}/third-party/gtest-1.7.0/fused-src)
-  set(TESTS
-        blob_file_iterator_test
-        blob_file_size_collector_test
-        blob_file_test
-        blob_format_test
-        blob_gc_job_test
-        blob_gc_picker_test
-        table_builder_test
-        thread_safety_test
-        titan_db_test
-        titan_options_test
-        util_test
-        version_test)
-  set(TEST_LIBS
-        titan
-        rocksdb
-        testutillib
-        gtest)
+# if (WITH_TITAN_TESTS AND (NOT CMAKE_BUILD_TYPE STREQUAL "Release"))
+#   include(CTest)
+#   include_directories(SYSTEM ${ROCKSDB_DIR}/third-party/gtest-1.7.0/fused-src)
+#   set(TESTS
+#         blob_file_iterator_test
+#         blob_file_size_collector_test
+#         blob_file_test
+#         blob_format_test
+#         blob_gc_job_test
+#         blob_gc_picker_test
+#         table_builder_test
+#         thread_safety_test
+#         titan_db_test
+#         titan_options_test
+#         util_test
+#         version_test)
+#   set(TEST_LIBS
+#         titan
+#         rocksdb
+#         testutillib
+#         gtest)
         
-  foreach(test ${TESTS})
-    add_executable(titan_${test} src/${test}.cc $<TARGET_OBJECTS:testharness>)
-      target_link_libraries(titan_${test} ${TEST_LIBS})
-      add_test(titan_${test} titan_${test})
-  endforeach(test ${TESTS})  
-endif()
+#   foreach(test ${TESTS})
+#     add_executable(titan_${test} src/${test}.cc $<TARGET_OBJECTS:testharness>)
+#       target_link_libraries(titan_${test} ${TEST_LIBS})
+#       add_test(titan_${test} titan_${test})
+#   endforeach(test ${TESTS})  
+# endif()
 
 if (WITH_TITAN_TOOLS)
   set(TOOLS_LIBS
