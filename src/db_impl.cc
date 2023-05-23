@@ -340,7 +340,7 @@ Status TitanDBImpl::Close() {
   }
   for (auto& builder : builders_) {
     std::cerr<<"finish"<<std::endl;
-    builder.second.Finish();
+    builder.second.Flush();
   }
   if (lock_) {
     std::cerr<<"unlock file\n";
