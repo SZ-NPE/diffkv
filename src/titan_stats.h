@@ -33,6 +33,7 @@ enum class InternalOpStatsType : int {
 
 enum class InternalOpType : int {
   FLUSH = 0,
+  BEFORE_FLUSH,
   COMPACTION,
   GC,
   INTERNAL_OP_ENUM_MAX,
@@ -121,6 +122,7 @@ class TitanInternalStats {
   }
 
   void DumpAndResetInternalOpStats(LogBuffer* log_buffer);
+  void DumpInternalOpStats(std::string* value);
 
  private:
   static const std::unordered_map<std::string, TitanInternalStats::StatsType>
@@ -323,6 +325,14 @@ inline uint64_t GetAndResetStats(InternalOpStats* stats,
   if (stats != nullptr) {
     return (*stats)[static_cast<int>(type)].exchange(0,
                                                      std::memory_order_relaxed);
+  }
+  return 0;
+}
+
+inline uint64_t GetStats(InternalOpStats* stats,
+                                 InternalOpStatsType type) {
+  if (stats != nullptr) {
+    return (*stats)[static_cast<int>(type)].load(std::memory_order_relaxed);
   }
   return 0;
 }

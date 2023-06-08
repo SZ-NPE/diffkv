@@ -87,9 +87,9 @@ class BlobFileSet {
     return obsolete_columns_.count(cf_id) > 0;
   }
 
-  void PrintFileStates() {
+  void PrintFileStates(std::string* value) {
     for(auto& cf:column_families_){
-      cf.second->PrintFileStates();
+      cf.second->PrintFileStates(value);
     }
   }
 

@@ -2,6 +2,7 @@
 #include "atomic"
 #include "blob_file_set.h"
 #include "iostream"
+#include  <string>
 
 std::atomic<uint64_t> compute_gc_score{0};
 
@@ -322,34 +323,35 @@ std::vector<int> CountSortedRun(std::vector<std::shared_ptr<BlobFileMeta>>& file
   */
 }
 
-void BlobStorage::PrintFileStates() {
-    std::unique_lock<std::mutex> l(mutex_);
-    std::vector<int> numObsolete(cf_options_.num_levels);
-    std::vector<int> numNeedMerge(cf_options_.num_levels);
-    std::vector<int> numNeedGC(cf_options_.num_levels);
-    std::vector<int> numFile(cf_options_.num_levels);
-    std::vector<uint64_t> gc_discardable_size(cf_options_.num_levels);
-    std::vector<uint64_t> nomark_discardable_size(cf_options_.num_levels);
-    std::vector<uint64_t> merge_discardable_size(cf_options_.num_levels);
-    std::vector<uint64_t> reach_without_mark(cf_options_.num_levels);
-    uint64_t num_unsorted = 0;
-    uint64_t discardable_unsorted = 0;
-    uint64_t discardable_reach_unsorted = 0;
-    std::vector<std::vector<std::shared_ptr<BlobFileMeta>>> files(cf_options_.num_levels);
-    for (auto& file:files_){
-      if(file.second->file_type()==kUnSorted){
-        num_unsorted++;
-        discardable_unsorted += file.second->discardable_size();
-        if(file.second->GetDiscardableRatio()>cf_options_.blob_file_discardable_ratio){
-          discardable_reach_unsorted += file.second->discardable_size();
-        }
-        continue;
+void BlobStorage::PrintFileStates(std::string *value) {
+  std::unique_lock<std::mutex> l(mutex_);
+  std::vector<int> numObsolete(cf_options_.num_levels);
+  std::vector<int> numNeedMerge(cf_options_.num_levels);
+  std::vector<int> numNeedGC(cf_options_.num_levels);
+  std::vector<int> numFile(cf_options_.num_levels);
+  std::vector<uint64_t> gc_discardable_size(cf_options_.num_levels);
+  std::vector<uint64_t> nomark_discardable_size(cf_options_.num_levels);
+  std::vector<uint64_t> merge_discardable_size(cf_options_.num_levels);
+  std::vector<uint64_t> reach_without_mark(cf_options_.num_levels);
+  uint64_t num_unsorted = 0;
+  uint64_t discardable_unsorted = 0;
+  uint64_t discardable_reach_unsorted = 0;
+  std::vector<std::vector<std::shared_ptr<BlobFileMeta>>> files(
+      cf_options_.num_levels);
+  for (auto &file : files_) {
+    if (file.second->file_type() == kUnSorted) {
+      num_unsorted++;
+      discardable_unsorted += file.second->discardable_size();
+      if (file.second->GetDiscardableRatio() >
+          cf_options_.blob_file_discardable_ratio) {
+        discardable_reach_unsorted += file.second->discardable_size();
       }
-      int level = file.second->file_level();
-      files[level].push_back(file.second);
-      numFile[level]++;
-      switch (file.second->file_state())
-      {
+      continue;
+    }
+    int level = file.second->file_level();
+    files[level].push_back(file.second);
+    numFile[level]++;
+    switch (file.second->file_state()) {
       case BlobFileMeta::FileState::kObsolete:
         numObsolete[level]++;
         break;
@@ -369,24 +371,26 @@ void BlobStorage::PrintFileStates() {
         break;
       }
     }
-    std::cout<<"~~~~~ overall ~~~~~\n";
-    std::cout<<"num blob files"<<files_.size()<<", obsolete files in storage records:"<<obsolete_files_.size()<<std::endl;
+    std::stringstream ss;
+    ss<<"~~~~~ overall ~~~~~\n";
+    ss<<"num blob files"<<files_.size()<<", obsolete files in storage records:"<<obsolete_files_.size()<<std::endl;
     for(int i=0;i<cf_options_.num_levels;i++){
-      std::cout << "~~~~~ level "<<i<<" ~~~~~~\n";
-      std::cout<<"level "<<i<<" has "<<numFile[i]<<" files"<<std::endl;
+      ss << "~~~~~ level "<<i<<" ~~~~~~\n";
+      ss<<"level "<<i<<" has "<<numFile[i]<<" files"<<std::endl;
       auto sr = CountSortedRun(files[i]);
-      std::cout<<"level "<<i<<" has "<<sr.size()<<" sorted runs, each of them cotains"<<"[";
+      ss<<"level "<<i<<" has "<<sr.size()<<" sorted runs, each of them cotains"<<"[";
       for(int c:sr){
-        std::cout<<c<<", ";
+        ss<<c<<", ";
       }
       
-      std::cout<<"] blob files"<<std::endl;
-      std::cout<<"numBlobsolete files: "<<numObsolete[i]<<"\nnum need merge files: "<<numNeedMerge[i]<<"\nnum need gc files: "<<numNeedGC[i]<<"\ndiscardable size of need gc: "<<gc_discardable_size[i]<<"\ndiscardable size of need merge: "<<merge_discardable_size[i]<<"\ndiscardable size of no mark: "<<nomark_discardable_size[i]<<"."<<std::endl;
-      std::cout<<"reach gc thresh but no mark:"<<reach_without_mark[i]<<std::endl;
+      ss<<"] blob files"<<std::endl;
+      ss<<"numBlobsolete files: "<<numObsolete[i]<<"\nnum need merge files: "<<numNeedMerge[i]<<"\nnum need gc files: "<<numNeedGC[i]<<"\ndiscardable size of need gc: "<<gc_discardable_size[i]<<"\ndiscardable size of need merge: "<<merge_discardable_size[i]<<"\ndiscardable size of no mark: "<<nomark_discardable_size[i]<<"."<<std::endl;
+      ss<<"reach gc thresh but no mark:"<<reach_without_mark[i]<<std::endl;
     }
-    std::cout << "~~~~~ unsorted file ~~~~~~\n";
-    std::cout<<"discardable: "<<discardable_unsorted<<"\n discardable that reach threshold: "<<discardable_reach_unsorted<<std::endl;
-  }
+    ss << "~~~~~ unsorted file ~~~~~~\n";
+    ss<<"discardable: "<<discardable_unsorted<<"\ndiscardable that reach threshold: "<<discardable_reach_unsorted<<std::endl<<std::endl;
+    value->append(ss.str());
+}
 
 void BlobStorage::GetObsoleteFiles(std::vector<std::string> *obsolete_files,
                                    SequenceNumber oldest_sequence) {

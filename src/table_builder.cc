@@ -84,8 +84,6 @@ void TitanTableBuilder::Add(const Slice &key, const Slice &value) {
     // we write to blob file and insert index
     std::string index_value;
     AddBlob(ikey.user_key, value, &index_value);
-    UpdateIOBytes(prev_bytes_read, prev_bytes_written, &io_bytes_read_,
-                  &io_bytes_written_);
     if (ok()) {
       ikey.type = kTypeBlobIndex;
       std::string index_key;
@@ -165,6 +163,10 @@ void TitanTableBuilder::AddBlob(const Slice &key, const Slice &value,
   if (!ok()) return;
   StopWatch write_sw(db_options_.env, stats_, BLOB_DB_BLOB_FILE_WRITE_MICROS);
 
+  uint64_t prev_bytes_read = 0;
+  uint64_t prev_bytes_written = 0;
+  SavePrevIOBytes(&prev_bytes_read, &prev_bytes_written);
+
   if (!blob_builder_) {
     status_ = blob_manager_->NewFile(&blob_handle_);
     if (!ok()) return;
@@ -179,7 +181,7 @@ void TitanTableBuilder::AddBlob(const Slice &key, const Slice &value,
   RecordInHistogram(stats_, BLOB_DB_KEY_SIZE, key.size());
   RecordInHistogram(stats_, BLOB_DB_VALUE_SIZE, value.size());
   AddStats(stats_, cf_id_, TitanInternalStats::LIVE_BLOB_SIZE, value.size());
-  bytes_written_ += key.size() + value.size();
+  // bytes_written_ += key.size() + value.size();
 
   BlobIndex index;
   index.file_number = blob_handle_->GetNumber();
@@ -188,6 +190,8 @@ void TitanTableBuilder::AddBlob(const Slice &key, const Slice &value,
   record.key = key;
   record.value = value;
   blob_builder_->Add(record, &index.blob_handle);
+  UpdateIOBytes(prev_bytes_read, prev_bytes_written, &io_bytes_read_,
+                &io_bytes_written_);
   // RecordTick(stats_, BLOB_DB_BLOB_FILE_BYTES_WRITTEN,
   // index.blob_handle.size);
   bytes_written_ += record.size();
@@ -203,7 +207,12 @@ void TitanTableBuilder::AddBlob(const Slice &key, const Slice &value,
 void TitanTableBuilder::FinishBlobFile() {
   TitanStopWatch sw(env_, blob_finish_time_);
   if (blob_builder_) {
+    uint64_t prev_bytes_read = 0;
+    uint64_t prev_bytes_written = 0;
+    SavePrevIOBytes(&prev_bytes_read, &prev_bytes_written);
     blob_builder_->Finish();
+    UpdateIOBytes(prev_bytes_read, prev_bytes_written, &io_bytes_read_,
+                  &io_bytes_written_);
     if (ok()) {
       ROCKS_LOG_INFO(db_options_.info_log,
                      "Titan table builder finish output file %" PRIu64 ".",
@@ -340,6 +349,9 @@ void ForegroundBuilder::handleRequest(int b) {
     auto reqs = std::move(requests_[b].GetBulk());
     // std::cerr<<"got"<<std::endl;
     for (Request *req : reqs) {
+      uint64_t prev_bytes_read = 0;
+      uint64_t prev_bytes_written = 0;
+      SavePrevIOBytes(&prev_bytes_read, &prev_bytes_written);
       if (req == nullptr) return;
       // std::cerr<<"got request"<<std::endl;
       // finish added blob
@@ -380,6 +392,10 @@ void ForegroundBuilder::handleRequest(int b) {
         blob_index.file_number = handle_[b]->GetNumber();
         builder_[b]->Add(blob_record, &blob_index.blob_handle);
         AddStats(stats_, cf_id_, TitanInternalStats::LIVE_BLOB_SIZE, req->val.size());
+        UpdateIOBytes(prev_bytes_read, prev_bytes_written, &io_bytes_read_,
+                      &io_bytes_written_);
+        bytes_written_ += blob_record.size();
+        UpdateInternalOpStats();
 
         if (handle_[b]->GetFile()->GetFileSize() >=
             cf_options_.blob_file_target_size) {
@@ -420,7 +436,13 @@ Status ForegroundBuilder::FinishBlob(int b) {
   {
     TitanStopWatch sw(env_, finish_time);
     if (!builder_[b] && !handle_[b]) return s;
+    uint64_t prev_bytes_read = 0;
+    uint64_t prev_bytes_written = 0;
+    SavePrevIOBytes(&prev_bytes_read, &prev_bytes_written);
     s = builder_[b]->Finish();
+    UpdateIOBytes(prev_bytes_read, prev_bytes_written, &io_bytes_read_,
+                  &io_bytes_written_);
+    UpdateInternalOpStats();
     if (s.ok()) {
       auto file = std::make_shared<BlobFileMeta>(
           handle_[b]->GetNumber(), handle_[b]->GetFile()->GetFileSize(),
@@ -438,6 +460,35 @@ Status ForegroundBuilder::FinishBlob(int b) {
   }
   foreground_blob_finish_time += finish_time;
   return s;
+}
+
+void ForegroundBuilder::UpdateInternalOpStats() {
+  if (stats_ == nullptr) {
+    return;
+  }
+  TitanInternalStats *internal_stats = stats_->internal_stats(cf_id_);
+  if (internal_stats == nullptr) {
+    return;
+  }
+  InternalOpType op_type = InternalOpType::BEFORE_FLUSH;
+  InternalOpStats *internal_op_stats =
+      internal_stats->GetInternalOpStatsForType(op_type);
+  assert(internal_op_stats != nullptr);
+  // AddStats(internal_op_stats, InternalOpStatsType::COUNT);
+  AddStats(internal_op_stats, InternalOpStatsType::BYTES_READ, bytes_read_);
+  AddStats(internal_op_stats, InternalOpStatsType::BYTES_WRITTEN,
+           bytes_written_);
+  AddStats(internal_op_stats, InternalOpStatsType::IO_BYTES_READ,
+           io_bytes_read_);
+  AddStats(internal_op_stats, InternalOpStatsType::IO_BYTES_WRITTEN,
+           io_bytes_written_);
+  // if (blob_builder_ != nullptr) {
+  //   AddStats(internal_op_stats, InternalOpStatsType::OUTPUT_FILE_NUM);
+  // }
+  bytes_read_ = 0;
+  bytes_written_ = 0;
+  io_bytes_read_ = 0;
+  io_bytes_written_ = 0;
 }
 
 }  // namespace titandb

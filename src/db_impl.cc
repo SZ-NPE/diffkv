@@ -167,13 +167,18 @@ TitanDBImpl::TitanDBImpl(const TitanDBOptions& options,
   dirname_ = db_options_.dirname;
   if (db_options_.statistics != nullptr) {
     stats_.reset(new TitanStats(db_options_.statistics.get()));
+  } else {
+    stats_.reset(new TitanStats(nullptr));
   }
   blob_manager_.reset(new FileManager(this));
 }
 
 TitanDBImpl::~TitanDBImpl() {
+  std::cerr << "===dump stats===" << std::endl;
   DumpStats();
+  std::cerr << "===close===" << std::endl;
   Close();
+  std::cerr << "===done===" << std::endl;
   std::cerr<<"done"<<std::endl;
 }
 
@@ -341,6 +346,7 @@ Status TitanDBImpl::Close() {
   for (auto& builder : builders_) {
     std::cerr<<"finish"<<std::endl;
     builder.second.Flush();
+    builder.second.Finish();
   }
   if (lock_) {
     std::cerr<<"unlock file\n";
@@ -562,16 +568,16 @@ Status TitanDBImpl::Put(const rocksdb::WriteOptions& options,
   // std::cerr<<"block write size is "<<db_options_.block_write_size<<".\n";
   while (db_options_.block_write_size>0 && block_for_size_.load()){
     std::cerr<<"blocked by size_cv\n";
-      {
-        uint32_t cf_id = column_family->GetID();
-        auto bs = blob_file_set_->GetBlobStorage(cf_id).lock();
-        bs->ComputeGCScore();
-        AddToGCQueue(cf_id);
-        MaybeScheduleGC();
-      }
+    {
+      uint32_t cf_id = column_family->GetID();
+      auto bs = blob_file_set_->GetBlobStorage(cf_id).lock();
+      bs->ComputeGCScore();
+      AddToGCQueue(cf_id);
+      MaybeScheduleGC();
+    }
     MutexLock l(&size_mutex_);
     if(block_for_size_.load()){
-    size_cv_.Wait();
+      size_cv_.Wait();
     std::cerr<<"wait done\n";
     }
   }
@@ -1097,43 +1103,53 @@ TitanDBOptions TitanDBImpl::GetTitanDBOptions() const {
   *static_cast<DBOptions*>(&result) = db_impl_->GetDBOptions();
   return result;
 }
+bool TitanDBImpl::GetStats(std::string* value) {
+  std::stringstream ss;
+  ss << "## write size ##\n";
+  ss << "blob builder written bytes: " << bytes_written / 1000000.0
+     << std::endl;
+
+  ss << "\n## unsorted blob file gc ##\n";
+  ss << "gc update lsm time: " << gc_update_lsm / 1000000.0 << std::endl;
+  ss << "gc read lsm time: " << gc_read_lsm / 1000000.0 << std::endl;
+  ss << "gc sample time: " << gc_sample / 1000000.0 << std::endl;
+  ss << "gc write blob time: " << gc_write_blob / 1000000.0 << std::endl;
+  ss << "total gc time: " << gc_total / 1000000.0 << std::endl;
+  ss << "compute gc score time: " << compute_gc_score / 1000000.0 << std::endl;
+
+  ss << "\n## sorted blob file merge ##\n";
+  ss << "blob merge time: " << blob_merge_time / 1000000.0 << std::endl;
+  ss << "blob read time: " << blob_read_time / 1000000.0 << std::endl;
+  ss << "blob add time: " << blob_add_time / 1000000.0 << std::endl;
+  ss << "blob finish time; " << blob_finish_time / 1000000.0 << std::endl;
+
+  ss << "\n## marked files ##\n";
+  ss << "range merge marked file: " << range_merge_file << std::endl;
+  ss << "gc marked file: " << gc_mark_file << std::endl;
+
+  ss << "\n## unsorted blob file build ##\n";
+  ss << "builder wait flush: " << waitflush / 1000000.0 << std::endl;
+  ss << "blob add time; " << foreground_blob_add_time / 1000000.0 << std::endl;
+  ss << "blob finish time: " << foreground_blob_finish_time / 1000000.0
+     << std::endl;
+
+  ss << "\n## blob file states in each level ##\n";
+  value->append(ss.str());
+  blob_file_set_->PrintFileStates(value);
+  DumpStatsToString(value);
+  return true;
+}
 
 bool TitanDBImpl::GetProperty(ColumnFamilyHandle* column_family,
                               const Slice& property, std::string* value) {
-  std::cout << "## write size ##\n";
-  std::cout << "blob builder written bytes: " << bytes_written / 1000000.0
-            << std::endl;
-
-  std::cout << "\n## unsorted blob file gc ##\n";
-  std::cout << "gc update lsm time: " << gc_update_lsm / 1000000.0 << std::endl;
-  std::cout << "gc read lsm time: " << gc_read_lsm / 1000000.0 << std::endl;
-  std::cout << "gc sample time: " << gc_sample / 1000000.0 << std::endl;
-  std::cout << "gc write blob time: " << gc_write_blob / 1000000.0 << std::endl;
-  std::cout << "total gc time: " << gc_total / 1000000.0 << std::endl;
-  std::cout << "compute gc score time: " << compute_gc_score / 1000000.0
-            << std::endl;
-
-  std::cout << "\n## sorted blob file merge ##\n";
-  std::cout << "blob merge time: " << blob_merge_time / 1000000.0 << std::endl;
-  std::cout << "blob read time: " << blob_read_time / 1000000.0 << std::endl;
-  std::cout << "blob add time: " << blob_add_time / 1000000.0 << std::endl;
-  std::cout << "blob finish time; " << blob_finish_time / 1000000.0
-            << std::endl;
-
-  std::cout << "\n ## marked files ##\n";
-  std::cout << "range merge marked file: " << range_merge_file << std::endl;
-  std::cout << "gc marked file: " << gc_mark_file << std::endl;
-
-  std::cout << "\n## unsorted blob file build ##\n";
-  std::cout << "builder wait flush: " << waitflush / 1000000.0 << std::endl;
-  std::cout << "blob add time; "
-            << foreground_blob_add_time / 1000000.0 << std::endl;
-  std::cout << "blob finish time: "
-            << foreground_blob_finish_time / 1000000.0 << std::endl;
-
-  std::cout << "\n## blob file states in each level ##\n";
-  blob_file_set_->PrintFileStates();
   assert(column_family != nullptr);
+  std::string property_str = property.ToString();
+  if(property_str=="diffkv.stats")
+  {
+    GetStats(value);
+    return true;
+  }
+
   bool s = false;
   /*
   if (stats_.get() != nullptr) {
@@ -1338,12 +1354,12 @@ void TitanDBImpl::OnCompactionCompleted(
     bool count_sorted_run =
         cf_options.level_merge && cf_options.range_merge &&
         cf_options.num_levels - 2 <= compaction_job_info.output_level;
-        /*
-    if(count_sorted_run){
+    /*
+if(count_sorted_run){
     std::cerr<<"num levels "<<cf_options.num_levels<<" output level "<<compaction_job_info.output_level<<" input level "<<compaction_job_info.base_input_level<<std::endl;
     if(cf_options.num_levels - 1 == compaction_job_info.output_level) std::cerr<<compaction_job_info.output_level<<" is "<<cf_options.num_levels - 1<<std::endl;
     else std::cerr<<"no"<<std::endl;
-    }*/
+}*/
     for (const auto& bfs : blob_files_size_diff) {
       // std::cerr<<"total "<<blob_files_size_diff.size()<<"vtables in output level"<<compaction_job_info.output_level<<std::endl;
       // blob file size < 0 means discardable size > 0
@@ -1386,8 +1402,8 @@ void TitanDBImpl::OnCompactionCompleted(
                         cf_options.high_level_blob_discardable_ratio ||
                     (static_cast<int>(file->file_level()) >=
                          cf_options.num_levels - 2 &&*/
-                     file->GetDiscardableRatio() >
-                         cf_options.blob_file_discardable_ratio)) {
+                    file->GetDiscardableRatio() >
+                    cf_options.blob_file_discardable_ratio)) {
           if(file->file_state() != BlobFileMeta::FileState::kToGC)
             mark++;
           file->FileStateTransit(BlobFileMeta::FileEvent::kNeedGC);
@@ -1416,11 +1432,11 @@ void TitanDBImpl::OnCompactionCompleted(
     bool bg_gc = cf_options.level_merge&&db_options_.sep_before_flush;
     if(db_options_.block_write_size>0){
     if(total_size>db_options_.block_write_size) {
-      block_for_size_.store(true);
+        block_for_size_.store(true);
     } else if(block_for_size_.load()){
-      block_for_size_.store(false);
-      size_cv_.SignalAll();
-    }
+        block_for_size_.store(false);
+        size_cv_.SignalAll();
+      }
     }
 
     if (wisc_gc || bg_gc) {
@@ -1474,6 +1490,29 @@ void TitanDBImpl::DumpStats() {
     }
   }
   log_buffer.FlushBufferToLog();
+}
+
+void TitanDBImpl::DumpStatsToString(std::string* value) {
+  if (stats_ == nullptr) {
+    return;
+  }
+  {
+    MutexLock l(&mutex_);
+    char buf[2000];
+    for (auto& cf : cf_info_) {
+      TitanInternalStats* internal_stats = stats_->internal_stats(cf.first);
+      if (internal_stats == nullptr) {
+        snprintf(buf, sizeof(buf), "Column family [%s] missing internal stats.\n",
+                 cf.second.name.c_str());
+        value->append(buf);
+        continue;
+      }
+      snprintf(buf, sizeof(buf), "Titan internal stats for column family [%s]:\n",
+               cf.second.name.c_str());
+      value->append(buf);
+      internal_stats->DumpInternalOpStats(value);
+    }
+  }
 }
 
 }  // namespace titandb

@@ -48,7 +48,7 @@ class BlobStorage {
 
   const TitanDBOptions& db_options() { return db_options_; }
 
-  void PrintFileStates();
+  void PrintFileStates(std::string* value);
 
   const TitanCFOptions& cf_options() { return cf_options_; }
 

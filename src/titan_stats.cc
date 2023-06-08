@@ -1,8 +1,11 @@
 #include "titan_stats.h"
-#include "titan/db.h"
+
+#include <inttypes.h>
 
 #include <map>
 #include <string>
+
+#include "titan/db.h"
 
 namespace rocksdb {
 namespace titandb {
@@ -73,9 +76,10 @@ const std::unordered_map<std::string, TitanInternalStats::StatsType>
 const std::array<std::string,
                  static_cast<int>(InternalOpType::INTERNAL_OP_ENUM_MAX)>
     TitanInternalStats::internal_op_names = {{
-        "Flush     ",
-        "Compaction",
-        "GC        ",
+        "Flush      ",
+        "BeforeFlush",
+        "Compaction ",
+        "GC         ",
     }};
 
 void TitanInternalStats::DumpAndResetInternalOpStats(LogBuffer* log_buffer) {
@@ -93,21 +97,21 @@ void TitanInternalStats::DumpAndResetInternalOpStats(LogBuffer* log_buffer) {
         log_buffer, "%s %5d %10.1f %10.1f  %10.1f   %10.1f %8d %8d",
         internal_op_names[op].c_str(),
         GetAndResetStats(&internal_op_stats_[op], InternalOpStatsType::COUNT),
-        GetAndResetStats(&internal_op_stats_[op],
+        (double)GetAndResetStats(&internal_op_stats_[op],
                          InternalOpStatsType::BYTES_READ) /
             GB,
-        GetAndResetStats(&internal_op_stats_[op],
+        (double)GetAndResetStats(&internal_op_stats_[op],
                          InternalOpStatsType::BYTES_WRITTEN) /
             GB,
-        GetAndResetStats(&internal_op_stats_[op],
+        (double)GetAndResetStats(&internal_op_stats_[op],
                          InternalOpStatsType::IO_BYTES_READ) /
             GB,
-        GetAndResetStats(&internal_op_stats_[op],
+        (double)GetAndResetStats(&internal_op_stats_[op],
                          InternalOpStatsType::IO_BYTES_WRITTEN) /
             GB,
-        GetAndResetStats(&internal_op_stats_[op],
+        (double)GetAndResetStats(&internal_op_stats_[op],
                          InternalOpStatsType::INPUT_FILE_NUM),
-        GetAndResetStats(&internal_op_stats_[op],
+        (double)GetAndResetStats(&internal_op_stats_[op],
                          InternalOpStatsType::OUTPUT_FILE_NUM));
     // GetAndResetStats(&internal_op_stats_[op],
     //  InternalOpStatsType::GC_SAMPLING_MICROS) /
@@ -118,6 +122,44 @@ void TitanInternalStats::DumpAndResetInternalOpStats(LogBuffer* log_buffer) {
     // GetAndResetStats(&internal_op_stats_[op],
     //  InternalOpStatsType::GC_UPDATE_LSM_MICROS) /
     // SECOND);
+  }
+}
+void TitanInternalStats::DumpInternalOpStats(std::string* value) {
+  constexpr double GB = 1.0 * 1024 * 1024 * 1024;
+  constexpr double SECOND = 1.0 * 1000000;
+  char buf[2000];
+  snprintf(buf, sizeof(buf),
+           "OP           COUNT READ(GB)  WRITE(GB) IO_READ(GB) IO_WRITE(GB) "
+           " FILE_IN FILE_OUT\n");
+  value->append(buf);
+  snprintf(buf, sizeof(buf),
+           "----------------------------------------------------------------"
+           "-----------------\n");
+  value->append(buf);
+  for (int op = 0; op < static_cast<int>(InternalOpType::INTERNAL_OP_ENUM_MAX);
+       op++) {
+    snprintf(
+        buf, sizeof(buf),
+        "%s %5" PRIu64 " %10.1f  %10.1f  %10.1f   %10.1f %8" PRIu64 " %8" PRIu64
+        "\n",
+        internal_op_names[op].c_str(),
+        GetStats(&internal_op_stats_[op], InternalOpStatsType::COUNT),
+        (double)GetStats(&internal_op_stats_[op],
+                         InternalOpStatsType::BYTES_READ) /
+            GB,
+        (double)GetStats(&internal_op_stats_[op],
+                         InternalOpStatsType::BYTES_WRITTEN) /
+            GB,
+        (double)GetStats(&internal_op_stats_[op],
+                         InternalOpStatsType::IO_BYTES_READ) /
+            GB,
+        (double)GetStats(&internal_op_stats_[op],
+                         InternalOpStatsType::IO_BYTES_WRITTEN) /
+            GB,
+        GetStats(&internal_op_stats_[op], InternalOpStatsType::INPUT_FILE_NUM),
+        GetStats(&internal_op_stats_[op],
+                 InternalOpStatsType::OUTPUT_FILE_NUM));
+    value->append(buf);
   }
 }
 

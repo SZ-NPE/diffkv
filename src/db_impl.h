@@ -139,6 +139,8 @@ class TitanDBImpl : public TitanDB {
 
   void OnCompactionCompleted(const CompactionJobInfo& compaction_job_info);
 
+  bool GetStats(std::string* value);
+  
   void StartBackgroundTasks();
 
   Status TEST_StartGC(uint32_t column_family_id);
@@ -230,6 +232,7 @@ class TitanDBImpl : public TitanDB {
   bool HasBGError() { return has_bg_error_.load(); }
 
   void DumpStats();
+  void DumpStatsToString(std::string* value);
 
   FileLock* lock_{nullptr};
   // The lock sequence must be Titan.mutex_.Lock() -> Base DB mutex_.Lock()

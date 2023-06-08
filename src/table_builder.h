@@ -158,6 +158,7 @@ class ForegroundBuilder {
   }
 
   ForegroundBuilder() = default;
+  void UpdateInternalOpStats();
 
  private:
   int num_builders_;
@@ -180,6 +181,12 @@ class ForegroundBuilder {
   void handleRequest(int i);
 
   Status FinishBlob(int b);
+
+  // counters
+  uint64_t bytes_read_ = 0;
+  uint64_t bytes_written_ = 0;
+  uint64_t io_bytes_read_ = 0;
+  uint64_t io_bytes_written_ = 0;
 };
 
 }  // namespace titandb

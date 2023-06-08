@@ -25,7 +25,7 @@ class BlobGCJob::GarbageCollectionWriteCallback : public WriteCallback {
  public:
   GarbageCollectionWriteCallback(ColumnFamilyHandle* cfh, std::string&& _key,
                                  BlobIndex&& blob_index)
-      : cfh_(cfh), key_(std::move(_key)), blob_index_(blob_index) {
+      : cfh_(cfh), key_(std::move(_key)), blob_index_(blob_index), read_bytes_(0) {
     assert(!key_.empty());
   }
 
@@ -303,16 +303,16 @@ Status BlobGCJob::DoRunGC() {
     BlobIndex blob_index = gc_iter->GetBlobIndex();
     // count read bytes for blob record of gc candidate files
     metrics_.bytes_read += blob_index.blob_handle.size;
-/*
-    if (!last_key.empty() && !gc_iter->key().compare(last_key)) {
-      if (last_key_valid) {
-        continue;
-      }
-    } else {
-      last_key = gc_iter->key().ToString();
-      last_key_valid = false;
-    }
-*/
+    /*
+        if (!last_key.empty() && !gc_iter->key().compare(last_key)) {
+          if (last_key_valid) {
+            continue;
+          }
+        } else {
+          last_key = gc_iter->key().ToString();
+          last_key_valid = false;
+        }
+    */
     bool discardable = false;
     s = DiscardEntry(gc_iter->key(), blob_index, &discardable);
     if (!s.ok()) {
