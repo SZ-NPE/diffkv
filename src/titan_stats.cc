@@ -16,6 +16,10 @@ static const std::string live_blob_size = "live-blob-size";
 static const std::string num_live_blob_file = "num-live-blob-file";
 static const std::string num_obsolete_blob_file = "num-obsolete-blob-file";
 static const std::string live_blob_file_size = "live-blob-file-size";
+static const std::string live_vtree_blob_file_size =
+    "live-vtree-blob-file-size";
+static const std::string live_vlog_blob_file_size =
+    "live-vlog-blob-file-size";
 static const std::string obsolete_blob_file_size = "obsolete-blob-file-size";
 static const std::string num_discardable_ratio_le0_file =
     "num-discardable-ratio-le0-file";
@@ -36,6 +40,10 @@ const std::string TitanDB::Properties::kNumObsoleteBlobFile =
     titandb_prefix + num_obsolete_blob_file;
 const std::string TitanDB::Properties::kLiveBlobFileSize =
     titandb_prefix + live_blob_file_size;
+const std::string TitanDB::Properties::kLiveVtreeBlobFileSize =
+    titandb_prefix + live_vtree_blob_file_size;
+const std::string TitanDB::Properties::kLiveVlogBlobFileSize =
+    titandb_prefix + live_vlog_blob_file_size;
 const std::string TitanDB::Properties::kObsoleteBlobFileSize =
     titandb_prefix + obsolete_blob_file_size;
 const std::string TitanDB::Properties::kNumDiscardableRatioLE0File =
@@ -59,6 +67,10 @@ const std::unordered_map<std::string, TitanInternalStats::StatsType>
          TitanInternalStats::NUM_OBSOLETE_BLOB_FILE},
         {TitanDB::Properties::kLiveBlobFileSize,
          TitanInternalStats::LIVE_BLOB_FILE_SIZE},
+        {TitanDB::Properties::kLiveVtreeBlobFileSize,
+         TitanInternalStats::LIVE_VTREE_BLOB_FILE_SIZE},
+        {TitanDB::Properties::kLiveVlogBlobFileSize,
+         TitanInternalStats::LIVE_VLOG_BLOB_FILE_SIZE},
         {TitanDB::Properties::kObsoleteBlobFileSize,
          TitanInternalStats::OBSOLETE_BLOB_FILE_SIZE},
         {TitanDB::Properties::kNumDiscardableRatioLE0File,
@@ -82,9 +94,30 @@ const std::array<std::string,
         "GC         ",
     }};
 
-void TitanInternalStats::DumpAndResetInternalOpStats(LogBuffer* log_buffer) {
+void TitanInternalStats::DumpInternalOpStats(LogBuffer* log_buffer) {
   constexpr double GB = 1.0 * 1024 * 1024 * 1024;
   constexpr double SECOND = 1.0 * 1000000;
+
+  uint64_t _live_blob_file_size = 0;
+  GetIntProperty("rocksdb.titandb.live-blob-file-size", &_live_blob_file_size);
+  uint64_t _live_vlog_blob_file_size = 0;
+  GetIntProperty("rocksdb.titandb.live-vlog-blob-file-size", &_live_vlog_blob_file_size);
+  uint64_t _live_vtree_blob_file_size = 0;
+  GetIntProperty("rocksdb.titandb.live-vtree-blob-file-size",
+                 &_live_vtree_blob_file_size);
+  LogToBuffer(log_buffer,
+              "----------------------------------------------------------------"
+              "-----------------");
+  LogToBuffer(log_buffer,
+              "LIVE_BLOB_FILE_SIZE: %10.1f\n"
+              "LIVE_VTREE_BLOB_FILE_SIZE: %10.1f\n"
+              "LIVE_VLOG_BLOB_FILE_SIZE: %10.1f\n",
+              (double)_live_blob_file_size / GB,
+              (double)_live_vtree_blob_file_size / GB,
+              (double)_live_vlog_blob_file_size / GB);
+  LogToBuffer(log_buffer,
+              "----------------------------------------------------------------"
+              "-----------------");
   LogToBuffer(log_buffer,
               "OP           COUNT READ(GB)  WRITE(GB) IO_READ(GB) IO_WRITE(GB) "
               " FILE_IN FILE_OUT");
@@ -93,26 +126,25 @@ void TitanInternalStats::DumpAndResetInternalOpStats(LogBuffer* log_buffer) {
               "-----------------");
   for (int op = 0; op < static_cast<int>(InternalOpType::INTERNAL_OP_ENUM_MAX);
        op++) {
-    LogToBuffer(
-        log_buffer, "%s %5d %10.1f %10.1f  %10.1f   %10.1f %8d %8d",
-        internal_op_names[op].c_str(),
-        GetAndResetStats(&internal_op_stats_[op], InternalOpStatsType::COUNT),
-        (double)GetAndResetStats(&internal_op_stats_[op],
-                         InternalOpStatsType::BYTES_READ) /
-            GB,
-        (double)GetAndResetStats(&internal_op_stats_[op],
-                         InternalOpStatsType::BYTES_WRITTEN) /
-            GB,
-        (double)GetAndResetStats(&internal_op_stats_[op],
-                         InternalOpStatsType::IO_BYTES_READ) /
-            GB,
-        (double)GetAndResetStats(&internal_op_stats_[op],
-                         InternalOpStatsType::IO_BYTES_WRITTEN) /
-            GB,
-        (double)GetAndResetStats(&internal_op_stats_[op],
-                         InternalOpStatsType::INPUT_FILE_NUM),
-        (double)GetAndResetStats(&internal_op_stats_[op],
-                         InternalOpStatsType::OUTPUT_FILE_NUM));
+    LogToBuffer(log_buffer, "%s %5d %10.1f %10.1f  %10.1f   %10.1f %8d %8d",
+                internal_op_names[op].c_str(),
+                GetStats(&internal_op_stats_[op], InternalOpStatsType::COUNT),
+                (double)GetStats(&internal_op_stats_[op],
+                                 InternalOpStatsType::BYTES_READ) /
+                    GB,
+                (double)GetStats(&internal_op_stats_[op],
+                                 InternalOpStatsType::BYTES_WRITTEN) /
+                    GB,
+                (double)GetStats(&internal_op_stats_[op],
+                                 InternalOpStatsType::IO_BYTES_READ) /
+                    GB,
+                (double)GetStats(&internal_op_stats_[op],
+                                 InternalOpStatsType::IO_BYTES_WRITTEN) /
+                    GB,
+                (double)GetStats(&internal_op_stats_[op],
+                                 InternalOpStatsType::INPUT_FILE_NUM),
+                (double)GetStats(&internal_op_stats_[op],
+                                 InternalOpStatsType::OUTPUT_FILE_NUM));
     // GetAndResetStats(&internal_op_stats_[op],
     //  InternalOpStatsType::GC_SAMPLING_MICROS) /
     // SECOND,
@@ -128,6 +160,31 @@ void TitanInternalStats::DumpInternalOpStats(std::string* value) {
   constexpr double GB = 1.0 * 1024 * 1024 * 1024;
   constexpr double SECOND = 1.0 * 1000000;
   char buf[2000];
+  uint64_t _live_blob_file_size = 0;
+  GetIntProperty("rocksdb.titandb.live-blob-file-size", &_live_blob_file_size);
+  uint64_t _live_vlog_blob_file_size = 0;
+  GetIntProperty("rocksdb.titandb.live-vlog-blob-file-size",
+                 &_live_vlog_blob_file_size);
+  uint64_t _live_vtree_blob_file_size = 0;
+  GetIntProperty("rocksdb.titandb.live-vtree-blob-file-size",
+                 &_live_vtree_blob_file_size);
+  snprintf(buf, sizeof(buf),
+           "----------------------------------------------------------------"
+           "-----------------\n");
+  value->append(buf);
+  snprintf(buf, sizeof(buf),
+           "LIVE_BLOB_FILE_SIZE: %10.1f\n"
+           "LIVE_VTREE_BLOB_FILE_SIZE: %10.1f\n"
+           "LIVE_VLOG_BLOB_FILE_SIZE: %10.1f\n",
+           (double)_live_blob_file_size / GB,
+           (double)_live_vtree_blob_file_size / GB,
+           (double)_live_vlog_blob_file_size / GB);
+  value->append(buf);
+
+  snprintf(buf, sizeof(buf),
+           "----------------------------------------------------------------"
+           "-----------------\n");
+  value->append(buf);
   snprintf(buf, sizeof(buf),
            "OP           COUNT READ(GB)  WRITE(GB) IO_READ(GB) IO_WRITE(GB) "
            " FILE_IN FILE_OUT\n");

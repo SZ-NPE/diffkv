@@ -1486,7 +1486,7 @@ void TitanDBImpl::DumpStats() {
       }
       LogToBuffer(&log_buffer, "Titan internal stats for column family [%s]:",
                   cf.second.name.c_str());
-      internal_stats->DumpAndResetInternalOpStats(&log_buffer);
+      internal_stats->DumpInternalOpStats(&log_buffer);
     }
   }
   log_buffer.FlushBufferToLog();

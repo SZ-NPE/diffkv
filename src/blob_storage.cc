@@ -164,6 +164,13 @@ void BlobStorage::AddBlobFile(std::shared_ptr<BlobFileMeta> &file) {
   blob_ranges_.emplace(std::make_pair(Slice(file->smallest_key()), file));
   AddStats(stats_, cf_id_, TitanInternalStats::LIVE_BLOB_FILE_SIZE,
            file->file_size());
+  if (file->file_type() == kUnSorted) {
+    AddStats(stats_, cf_id_, TitanInternalStats::LIVE_VLOG_BLOB_FILE_SIZE,
+             file->file_size());
+  } else if (file->file_type() == kSorted) {
+    AddStats(stats_, cf_id_, TitanInternalStats::LIVE_VTREE_BLOB_FILE_SIZE,
+             file->file_size());
+  }
   AddStats(stats_, cf_id_, TitanInternalStats::NUM_LIVE_BLOB_FILE, 1);
   if(file->file_type()==kSorted){
   level_blob_size_[file->file_level()].fetch_add(file->file_size());
@@ -215,6 +222,13 @@ void BlobStorage::MarkFileObsoleteLocked(std::shared_ptr<BlobFileMeta> file,
            file->file_size() - file->discardable_size());
   SubStats(stats_, cf_id_, TitanInternalStats::LIVE_BLOB_FILE_SIZE,
            file->file_size());
+  if (file->file_type() == kUnSorted) {
+    SubStats(stats_, cf_id_, TitanInternalStats::LIVE_VLOG_BLOB_FILE_SIZE,
+             file->file_size());
+  } else if (file->file_type() == kSorted) {
+    SubStats(stats_, cf_id_, TitanInternalStats::LIVE_VTREE_BLOB_FILE_SIZE,
+             file->file_size());
+  }
   SubStats(stats_, cf_id_, TitanInternalStats::NUM_LIVE_BLOB_FILE, 1);
   AddStats(stats_, cf_id_, TitanInternalStats::OBSOLETE_BLOB_FILE_SIZE,
            file->file_size());

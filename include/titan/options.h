@@ -36,7 +36,7 @@ struct TitanDBOptions : public DBOptions {
   // titan_stats_dump_period_sec.
   //
   // Default: 600 (10 min)
-  uint32_t titan_stats_dump_period_sec{0};
+  uint32_t titan_stats_dump_period_sec{600};
 
   bool sep_before_flush{false};
 

@@ -54,6 +54,8 @@ class TitanInternalStats {
     NUM_LIVE_BLOB_FILE,
     NUM_OBSOLETE_BLOB_FILE,
     LIVE_BLOB_FILE_SIZE,
+    LIVE_VTREE_BLOB_FILE_SIZE,
+    LIVE_VLOG_BLOB_FILE_SIZE,
     OBSOLETE_BLOB_FILE_SIZE,
 
     NUM_DISCARDABLE_RATIO_LE0,
@@ -121,7 +123,7 @@ class TitanInternalStats {
     return &internal_op_stats_[static_cast<int>(type)];
   }
 
-  void DumpAndResetInternalOpStats(LogBuffer* log_buffer);
+  void DumpInternalOpStats(LogBuffer* log_buffer);
   void DumpInternalOpStats(std::string* value);
 
  private:

@@ -159,6 +159,12 @@ class TitanDB : public StackableDB {
     //  "rocksdb.titandb.live-blob-file-size" - returns total size of live blob
     //      files.
     static const std::string kLiveBlobFileSize;
+    //  "rocksdb.titandb.live-vtree-blob-file-size" - returns total size of live
+    //   vtree blob files.
+    static const std::string kLiveVtreeBlobFileSize;
+    //  "rocksdb.titandb.live-vlog-blob-file-size" - returns total size of live
+    //   vlog blob files.
+    static const std::string kLiveVlogBlobFileSize;
     //  "rocksdb.titandb.obsolete-blob-file-size" - returns size of obsolete
     //      blob files.
     static const std::string kObsoleteBlobFileSize;
