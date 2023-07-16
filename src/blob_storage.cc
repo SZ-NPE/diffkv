@@ -447,9 +447,20 @@ size_t BlobStorage::ComputeGCScore() {
     gc_score_.clear();
 
     for (auto &file : files_) {
+      uint64_t live_size = 0;
+      uint64_t total_size = 0;
+      stats_->internal_stats(cf_id_)->GetIntProperty(
+          "rocksdb.titandb.live-blob-size", &live_size);
+      stats_->internal_stats(cf_id_)->GetIntProperty(
+          "rocksdb.titandb.live-blob-file-size", &total_size);
       if (file.second->is_obsolete() ||
-          (cf_options_.level_merge && (file.second->file_type() == kSorted || file.second->GetDiscardableRatio() <
-              cf_options_.blob_file_discardable_ratio))) {
+          (cf_options_.level_merge &&
+           (file.second->file_type() == kSorted ||
+            file.second->GetDiscardableRatio() < 1e-15 ||
+            (file.second->GetDiscardableRatio() <
+                 cf_options_.blob_file_discardable_ratio &&
+             (db_options_.block_write_size == 0 ||
+              total_size < db_options_.block_write_size))))) {
         continue;
       }
       gc_score_.push_back({});
